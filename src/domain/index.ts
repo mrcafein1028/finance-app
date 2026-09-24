@@ -1,0 +1,13 @@
+// Tầng domain: hàm thuần, không phụ thuộc React/Supabase (docs/02 §2).
+export * from './balance'
+export * from './budget'
+export * from './dates'
+export * from './errors'
+export * from './insights'
+export * from './investment'
+export * from './loan'
+export * from './money'
+export * from './networth'
+export * from './period'
+export * from './savings'
+export type * from './types'

@@ -1,0 +1,58 @@
+@import 'tailwindcss';
+
+/* Dark mode theo lớp .dark trên <html> (cài đặt theme: system/light/dark). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Token màu — dùng qua tiện ích Tailwind: bg-surface, text-muted, text-positive… */
+@theme {
+  --font-sans: ui-sans-serif, system-ui, 'Segoe UI', Roboto, sans-serif;
+
+  --color-canvas: #f6f7f9;
+  --color-surface: #ffffff;
+  --color-border: #e3e6eb;
+  --color-ink: #16181d;
+  --color-muted: #5b6270;
+  --color-brand: #0f766e;
+  --color-brand-ink: #ffffff;
+  --color-positive: #15803d;
+  --color-negative: #c2410c;
+  --color-warning: #b45309;
+
+  /* Màu biểu đồ theo thứ tự cố định (đã kiểm định CVD & độ tương phản — skill dataviz, palette mặc định). */
+  --color-series-1: #2a78d6;
+  --color-series-2: #eb6834;
+  --color-series-3: #1baf7a;
+  --color-series-4: #eda100;
+  --color-series-5: #e87ba4;
+  --color-grid: #e7e6e2;
+}
+
+.dark {
+  --color-canvas: #0f1115;
+  --color-surface: #171a20;
+  --color-border: #2a2f38;
+  --color-ink: #eceff4;
+  --color-muted: #9aa3b2;
+  --color-brand: #2dd4bf;
+  --color-brand-ink: #062622;
+  --color-positive: #4ade80;
+  --color-negative: #fb923c;
+  --color-warning: #fbbf24;
+  --color-series-1: #3987e5;
+  --color-series-2: #d95926;
+  --color-series-3: #199e70;
+  --color-series-4: #c98500;
+  --color-series-5: #d55181;
+  --color-grid: #2e2e2b;
+}
+
+html,
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+}
+
+/* Số tiền luôn thẳng cột. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}

@@ -45,9 +45,11 @@
 
 ## 3. Tour từng màn hình
 
-Trên máy tính: thanh bên trái. Trên điện thoại: thanh dưới (Tổng quan · Ngân sách · Giao dịch · Tài khoản & quỹ) và nút **Thêm** cho các trang còn lại. Nút **＋** tròn ở góc phải có mặt ở mọi trang để ghi giao dịch nhanh.
+Trên máy tính: thanh bên trái. Trên điện thoại: nút **☰** ở góc trên bên trái mở menu trượt với đủ các trang, chia 3 nhóm *Hằng ngày · Tài sản & nợ · Phân tích*, cùng Cài đặt và Đăng xuất ở cuối; thanh trên cùng luôn ghi tên trang đang xem. Nút **＋** tròn ở góc dưới bên phải có mặt ở mọi trang để ghi giao dịch nhanh.
 
-![Điện thoại, giao diện tối](anh/mobile-toi-tong-quan.png)
+| Trang chủ trên điện thoại | Menu ☰ đang mở |
+|---|---|
+| ![Điện thoại, giao diện tối](anh/mobile-toi-tong-quan.png) | ![Menu điện thoại](anh/mobile-toi-menu.png) |
 
 ### 3.1 Tổng quan
 - **Net worth** và thay đổi so với cuối tháng trước; đường nhỏ bên phải = 12 tháng gần nhất.

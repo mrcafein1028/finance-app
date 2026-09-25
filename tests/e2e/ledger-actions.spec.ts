@@ -89,9 +89,12 @@ test('W4: đối soát MoMo — thực tế 850k → ghi điều chỉnh giảm 
 
 test('W16: lưu trữ tài khoản có giao dịch; xóa được tài khoản chưa có giao dịch', async ({ page }) => {
   await openAccounts(page)
-  // Tài khoản có giao dịch: chỉ lưu trữ được, không có nút Xóa.
+  // Tài khoản có giao dịch: Xóa… báo trước sẽ mất những gì (nên Lưu trữ thay vì xóa).
   await accountRow(page, 'MoMo').click()
-  await expect(page.getByRole('button', { name: 'Xóa' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Xóa…' }).click()
+  const del = page.getByRole('dialog', { name: 'Xóa "MoMo"' })
+  await expect(del.getByRole('list', { name: 'Dữ liệu sẽ bị xóa' })).toContainText('giao dịch')
+  await del.getByRole('button', { name: 'Hủy' }).click()
   await page.getByRole('button', { name: 'Lưu trữ' }).click()
   await expect(page.getByText('Tài khoản còn 900.000 ₫')).toBeVisible()
   await page.getByRole('button', { name: 'Xác nhận lưu trữ' }).click()
@@ -109,8 +112,9 @@ test('W16: lưu trữ tài khoản có giao dịch; xóa được tài khoản c
   await dialog.getByLabel('Số dư hiện tại').fill('0')
   await dialog.getByRole('button', { name: 'Lưu' }).click()
   await accountRow(page, 'Ví phụ').click()
-  await page.getByRole('button', { name: 'Xóa' }).click()
-  await page.getByRole('button', { name: 'Xác nhận xóa' }).click()
+  await page.getByRole('button', { name: 'Xóa…' }).click()
+  await expect(page.getByRole('dialog')).toContainText('chưa có dữ liệu nào khác')
+  await page.getByRole('dialog').getByRole('button', { name: 'Xóa vĩnh viễn' }).click()
   await expect(page).toHaveURL(/\/accounts$/)
   await expect(accountRow(page, 'Ví phụ')).toHaveCount(0)
 })

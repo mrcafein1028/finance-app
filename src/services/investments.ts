@@ -76,7 +76,9 @@ export async function recordTrade(repos: Repositories, input: TradeInput, allTra
     updatedAt: nowIso(),
   }
   try {
-    positionAt([...allTrades.filter((t) => t.holdingId === input.holding.id), draft], '9999-12-31')
+    // Lệnh đang nhập là lệnh MỚI NHẤT trong ngày của nó — không dựa vào giờ máy người dùng (có thể lệch với
+    // giờ máy chủ đã ghi các lệnh trước) để khỏi báo nhầm "bán quá số đang có".
+    positionAt([...allTrades.filter((t) => t.holdingId === input.holding.id), { ...draft, createdAt: '9999-12-31T23:59:59.999Z' }], '9999-12-31')
   } catch (e) {
     if (e instanceof DomainError) throw new ValidationError([{ path: 'quantity', message: e.message }])
     throw e

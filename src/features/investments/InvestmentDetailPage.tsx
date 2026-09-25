@@ -6,10 +6,11 @@ import { EmptyState, ErrorState, LoadingState, Money } from '../../components/ui
 import { useToast } from '../../components/ui/toastContext'
 import { getRepos } from '../../data'
 import { useInvalidate, useLedgerView, type LedgerView } from '../../data/queries'
-import { positionAt, type HoldingValuation } from '../../domain/investment'
+import { positionAt, tradeAmounts, type CostInput, type HoldingValuation } from '../../domain/investment'
 import { D, round } from '../../domain/money'
 import { today } from '../../lib/clock'
-import { formatDate, formatMoney, formatPercent, parseMoneyInput, parseQuantityInput } from '../../lib/format'
+import { formatDate, formatMoney, formatPercent, parseMoneyInput, parsePercentInput, parseQuantityInput } from '../../lib/format'
+import { readPref, writePref } from '../../lib/prefs'
 import { HOLDING_ASSET_TYPES, type Account, type Holding, type HoldingAssetType } from '../../schemas'
 import { addHolding, deleteTrade, recordTrade, revalueAsset, sellOtherAsset, updatePrices } from '../../services/investments'
 import { AccountOptions } from '../transactions/pickers'
@@ -222,24 +223,87 @@ function HoldingDialog({ account, view, onClose }: { account: Account; view: Led
   )
 }
 
+type CostMode = 'percent' | 'amount'
+interface RememberedCosts {
+  feeMode: CostMode
+  fee: string
+  taxMode: CostMode
+  tax: string
+}
+
+/** Mức phí / thuế dùng lần trước cho mã + loại lệnh này (VD CCQ bán: 1,5% và 0,1%) — tiện nhập lại. */
+const costKey = (holdingId: string, side: 'buy' | 'sell') => `trade-costs:${holdingId}:${side}`
+function rememberedCosts(holdingId: string, side: 'buy' | 'sell'): RememberedCosts {
+  // Mặc định: phí theo %, thuế TNCN 0,1% trên giá trị bán (cổ phiếu, chứng chỉ quỹ tại Việt Nam).
+  return readPref<RememberedCosts>(costKey(holdingId, side), { feeMode: 'percent', fee: '0', taxMode: 'percent', tax: side === 'sell' ? '0,1' : '0' })
+}
+
+/** Ô phí / thuế: nhập theo % giá trị lệnh hoặc số tiền. */
+function CostField({ label, mode, onMode, value, onChange, computed }: { label: string; mode: CostMode; onMode: (m: CostMode) => void; value: string; onChange: (v: string) => void; computed: number | null }) {
+  const id = `cost-${label}`
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <label htmlFor={id} className="text-sm font-medium">
+          {label} {mode === 'percent' ? '(% giá trị lệnh)' : '(số tiền)'}
+        </label>
+        <div role="radiogroup" aria-label={`Cách nhập ${label.toLowerCase()}`} className="flex rounded-md bg-canvas p-0.5 text-xs font-medium">
+          {(['percent', 'amount'] as const).map((m) => (
+            <button key={m} type="button" role="radio" aria-checked={mode === m} onClick={() => onMode(m)} className={`rounded px-2 py-1 ${mode === m ? 'bg-surface text-ink shadow-sm' : 'text-muted'}`}>
+              {m === 'percent' ? '%' : '₫'}
+            </button>
+          ))}
+        </div>
+      </div>
+      <input
+        id={id}
+        inputMode="decimal"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-base outline-none focus:ring-2 focus:ring-brand"
+      />
+      <p className="text-sm text-muted">{mode === 'percent' ? (computed === null ? '—' : `= ${formatMoney(computed)}`) : parseMoneyInput(value) !== null ? `= ${formatMoney(parseMoneyInput(value)!)}` : ''}</p>
+    </div>
+  )
+}
+
 function TradeDialog({ account, view, holdings, initialHolding, onClose }: { account: Account; view: LedgerView; holdings: Holding[]; initialHolding: string; onClose: () => void }) {
   const invalidate = useInvalidate()
   const toast = useToast()
   const allHoldings = [...holdings, ...view.holdings.filter((h) => h.accountId === account.id && !holdings.some((x) => x.id === h.id))]
-  const [holdingId, setHoldingId] = useState(initialHolding || allHoldings[0]?.id || '')
+  const firstHolding = initialHolding || allHoldings[0]?.id || ''
+  const [holdingId, setHoldingId] = useState(firstHolding)
   const [side, setSide] = useState<'buy' | 'sell'>('buy')
   const [date, setDate] = useState(today())
   const [quantity, setQuantity] = useState('')
+  const [priceMode, setPriceMode] = useState<'unit' | 'total'>(() => readPref<'unit' | 'total'>('trade-price-mode', 'total'))
   const [price, setPrice] = useState('')
-  const [fee, setFee] = useState('0')
-  const [tax, setTax] = useState('0')
+  const [total, setTotal] = useState('')
+  const [costs, setCosts] = useState<RememberedCosts>(() => rememberedCosts(firstHolding, 'buy'))
   const [cashAccountId, setCashAccountId] = useState(account.id)
   const [opening, setOpening] = useState(false)
   const holding = allHoldings.find((h) => h.id === holdingId)
-  const q = parseQuantityInput(quantity)
-  const p = parseMoneyInput(price)
-  const gross = q && p !== null ? round(new D(q).times(p)) : null
   const position = holding ? positionAt(view.trades.filter((t) => t.holdingId === holding.id), '9999-12-31') : null
+  const unit = holding?.unit ?? 'đơn vị'
+
+  // Đổi mã / loại lệnh → nạp mức phí, thuế đã dùng lần trước cho đúng mã + loại lệnh đó.
+  const choose = (nextHolding: string, nextSide: 'buy' | 'sell') => {
+    setHoldingId(nextHolding)
+    setSide(nextSide)
+    setCosts(rememberedCosts(nextHolding, nextSide))
+  }
+
+  const q = parseQuantityInput(quantity)
+  const unitPrice = parseMoneyInput(price)
+  const totalValue = parseMoneyInput(total)
+  const feeRate = parsePercentInput(costs.fee, 20)
+  const taxRate = parsePercentInput(costs.tax, 20)
+  const cost = (mode: CostMode, raw: string, rate: number | null): CostInput | null =>
+    mode === 'percent' ? (rate === null ? null : { mode, rate }) : parseMoneyInput(raw) === null ? null : { mode, amount: parseMoneyInput(raw)! }
+  const fee = cost(costs.feeMode, costs.fee, feeRate)
+  const tax = cost(costs.taxMode, costs.tax, taxRate)
+  const priceInput = priceMode === 'unit' ? (unitPrice === null ? null : { mode: 'unit' as const, unitPrice }) : totalValue === null ? null : { mode: 'total' as const, total: totalValue }
+  const amounts = q && priceInput && fee && tax ? tradeAmounts({ side, quantity: q, price: priceInput, fee, tax }) : null
 
   return (
     <FormDialog
@@ -247,44 +311,84 @@ function TradeDialog({ account, view, holdings, initialHolding, onClose }: { acc
       onClose={onClose}
       onSubmit={async () => {
         if (!holding) return 'Chọn mã'
-        if (!q) return 'Số lượng không hợp lệ (VD 100 hoặc 0,5)'
-        if (p === null) return 'Nhập giá'
-        const f = parseMoneyInput(fee) ?? -1
-        const t = parseMoneyInput(tax) ?? -1
-        if (f < 0 || t < 0) return 'Phí / thuế không hợp lệ'
+        if (!q) return 'Số lượng không hợp lệ (VD 100 hoặc 196,5)'
+        if (!priceInput) return priceMode === 'unit' ? `Nhập giá / ${unit}` : 'Nhập tổng giá trị lệnh'
+        if (!fee || !tax) return 'Phí / thuế không hợp lệ (VD 1,5 cho 1,5% hoặc 20k)'
         if (date < account.openingDate) return `Ngày phải từ ${formatDate(account.openingDate)}`
-        await recordTrade(getRepos(), { account, holding, side, date, quantity: q, price: p, fee: f, tax: t, cashAccountId, isOpening: side === 'buy' && opening }, view.trades)
+        const a = tradeAmounts({ side, quantity: q, price: priceInput, fee, tax })
+        const isOpening = side === 'buy' && opening
+        await recordTrade(getRepos(), { account, holding, side, date, quantity: q, price: a.unitPrice, fee: isOpening ? 0 : a.fee, tax: isOpening ? 0 : a.tax, cashAccountId, isOpening }, view.trades)
+        writePref(costKey(holding.id, side), costs)
+        writePref('trade-price-mode', priceMode)
         await invalidate('trades', 'transactions')
         toast({ message: `Đã ghi lệnh ${side === 'buy' ? 'mua' : 'bán'} ${holding.symbol}` })
         onClose()
       }}
     >
-      <SegmentedControl label="Loại lệnh" value={side} onChange={setSide} options={[{ value: 'buy', label: 'Mua' }, { value: 'sell', label: 'Bán' }]} />
-      <SelectField label="Mã" value={holdingId} onChange={(e) => setHoldingId(e.target.value)} hint={position ? `Đang có ${position.quantity.toNumber().toLocaleString('vi-VN')} ${holding?.unit}` : undefined}>
+      <SegmentedControl label="Loại lệnh" value={side} onChange={(s) => choose(holdingId, s)} options={[{ value: 'buy', label: 'Mua' }, { value: 'sell', label: 'Bán' }]} />
+      <SelectField label="Mã" value={holdingId} onChange={(e) => choose(e.target.value, side)} hint={position ? `Đang có ${position.quantity.toNumber().toLocaleString('vi-VN', { maximumFractionDigits: 8 })} ${unit}` : undefined}>
         {allHoldings.map((h) => (
           <option key={h.id} value={h.id}>
             {h.symbol}
           </option>
         ))}
       </SelectField>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <TextField label="Số lượng" inputMode="decimal" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
-        <MoneyField label={`Giá / ${holding?.unit ?? 'đơn vị'}`} value={price} rawValue={price} onChange={(e) => setPrice(e.target.value)} />
-        <MoneyField label="Phí" value={fee} rawValue={fee} onChange={(e) => setFee(e.target.value)} />
-        <MoneyField label="Thuế" value={tax} rawValue={tax} onChange={(e) => setTax(e.target.value)} />
-      </div>
+      <TextField label={`Số lượng (${unit})`} inputMode="decimal" value={quantity} onChange={(e) => setQuantity(e.target.value)} hint="Có thể nhập số lẻ, VD 196,52" />
+      <SegmentedControl
+        label="Nhập giá theo"
+        value={priceMode}
+        onChange={setPriceMode}
+        options={[
+          { value: 'total', label: 'Tổng tiền' },
+          { value: 'unit', label: `Giá / ${unit}` },
+        ]}
+      />
+      {priceMode === 'total' ? (
+        <MoneyField label="Tổng giá trị lệnh (trước phí, thuế)" value={total} rawValue={total} onChange={(e) => setTotal(e.target.value)} hint="Số tiền mua / bán theo sao kê, chưa gồm phí và thuế" />
+      ) : (
+        <MoneyField label={`Giá / ${unit}`} value={price} rawValue={price} onChange={(e) => setPrice(e.target.value)} />
+      )}
+      {!(side === 'buy' && opening) && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <CostField label="Phí" mode={costs.feeMode} onMode={(m) => setCosts((c) => ({ ...c, feeMode: m }))} value={costs.fee} onChange={(v) => setCosts((c) => ({ ...c, fee: v }))} computed={amounts?.fee ?? null} />
+          <CostField label="Thuế" mode={costs.taxMode} onMode={(m) => setCosts((c) => ({ ...c, taxMode: m }))} value={costs.tax} onChange={(v) => setCosts((c) => ({ ...c, tax: v }))} computed={amounts?.tax ?? null} />
+        </div>
+      )}
       <TextField label="Ngày" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
       <SelectField label={side === 'buy' ? 'Trả tiền từ' : 'Nhận tiền vào'} value={cashAccountId} onChange={(e) => setCashAccountId(e.target.value)}>
         <AccountOptions accounts={view.accounts} balances={view.balances} filter={(a) => a.id === account.id || ['cash', 'bank', 'ewallet'].includes(a.kind)} />
       </SelectField>
       {side === 'buy' && <CheckboxField label="Vị thế đã có từ trước (không trừ tiền)" checked={opening} onChange={(e) => setOpening(e.target.checked)} />}
-      {gross !== null && (
-        <p role="status" className="rounded-lg bg-canvas px-3 py-2 text-sm">
-          Giá trị lệnh {formatMoney(gross)}
-          {side === 'sell' && position && position.quantity.gt(0) && p !== null && q && (
-            <> · lãi/lỗ thực hiện ước tính {formatMoney(round(new D(q).times(new D(p).minus(position.avgCost))), { sign: true })}</>
+      {amounts && (
+        <dl role="status" aria-label="Tóm tắt lệnh" className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg bg-canvas px-3 py-2 text-sm">
+          {priceMode === 'total' && (
+            <>
+              <dt className="text-muted">Giá / {unit}</dt>
+              <dd className="text-right">≈ {formatMoney(amounts.unitPrice)}</dd>
+            </>
           )}
-        </p>
+          <dt className="text-muted">Giá trị lệnh</dt>
+          <dd className="text-right">{formatMoney(amounts.gross)}</dd>
+          {!(side === 'buy' && opening) && (
+            <>
+              <dt className="text-muted">Phí + thuế</dt>
+              <dd className="text-right">{formatMoney(amounts.fee + amounts.tax)}</dd>
+              <dt className="font-medium">{side === 'buy' ? 'Tổng tiền phải trả' : 'Tiền thực nhận'}</dt>
+              <dd className="text-right font-semibold">{formatMoney(amounts.cash)}</dd>
+            </>
+          )}
+          {side === 'sell' && position && position.quantity.gt(0) && q && (
+            <>
+              <dt className="text-muted">Lãi/lỗ thực hiện (trước phí, thuế)</dt>
+              <dd className="text-right">{formatMoney(round(new D(q).times(new D(amounts.unitPrice).minus(position.avgCost))), { sign: true })}</dd>
+            </>
+          )}
+          {amounts.roundingDifference !== 0 && (
+            <dd className="col-span-2 mt-1 text-xs text-muted">
+              Giá / {unit} được làm tròn tới đồng nên giá trị lệnh lệch {formatMoney(Math.abs(amounts.roundingDifference))} so với tổng bạn nhập. Nếu cần khớp từng đồng với ngân hàng, dùng Đối soát số dư.
+            </dd>
+          )}
+        </dl>
       )}
     </FormDialog>
   )

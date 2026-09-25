@@ -13,9 +13,10 @@ export interface Position {
   feesAndTaxes: Money
 }
 
-/** Thứ tự lệnh: theo ngày, cùng ngày theo thời điểm nhập. */
+/** Thứ tự lệnh: theo ngày, cùng ngày theo thời điểm nhập; trùng cả thời điểm thì mua trước bán (không thể bán thứ chưa mua). */
+const SIDE_ORDER = { buy: 0, sell: 1 } as const
 export const sortTrades = (trades: readonly InvestmentTrade[]) =>
-  [...trades].sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
+  [...trades].sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt) || SIDE_ORDER[a.side] - SIDE_ORDER[b.side] || a.id.localeCompare(b.id))
 
 /** Vị thế của một mã tính tới cuối ngày `date`. Bán quá số đang có → DomainError (bất biến I5). */
 export function positionAt(trades: readonly InvestmentTrade[], date: IsoDate): Position {
@@ -114,4 +115,45 @@ export function valueHolding(holding: Holding, trades: readonly InvestmentTrade[
     returnPct: position.costBasis > 0 ? unrealized / position.costBasis : null,
     netProfit: position.realized + unrealized - position.feesAndTaxes,
   }
+}
+
+// ---------------------------------------------------------------- nhập lệnh (form F5)
+
+/** Phí / thuế nhập theo số tiền hoặc theo % giá trị lệnh (VD CCQ: phí bán 1,5%, thuế TNCN khi bán 0,1%). */
+export type CostInput = { mode: 'amount'; amount: Money } | { mode: 'percent'; rate: number }
+
+export interface TradeEntry {
+  side: 'buy' | 'sell'
+  /** Số lượng dạng chuỗi thập phân (VD "196.5"). */
+  quantity: string
+  /** Nhập giá mỗi đơn vị, HOẶC tổng giá trị lệnh (trước phí, thuế) — app tự suy ra giá. */
+  price: { mode: 'unit'; unitPrice: Money } | { mode: 'total'; total: Money }
+  fee: CostInput
+  tax: CostInput
+}
+
+export interface TradeAmounts {
+  /** Giá / đơn vị lưu vào lệnh (số nguyên đồng). */
+  unitPrice: Money
+  /** Giá trị lệnh = số lượng × giá. */
+  gross: Money
+  fee: Money
+  tax: Money
+  /** Mua: tiền phải trả (giá trị + phí + thuế). Bán: tiền thực nhận (giá trị − phí − thuế). */
+  cash: Money
+  /** Nhập theo tổng tiền: giá làm tròn tới đồng nên giá trị tính lại có thể lệch vài đồng so với số đã nhập. */
+  roundingDifference: Money
+}
+
+const costOf = (c: CostInput, gross: Money): Money => (c.mode === 'amount' ? c.amount : round(new D(gross).times(c.rate)))
+
+export function tradeAmounts(e: TradeEntry): TradeAmounts {
+  const q = new D(e.quantity)
+  if (!q.isFinite() || q.lte(0)) throw new DomainError('invalid_quantity', 'Số lượng phải lớn hơn 0')
+  const unitPrice = e.price.mode === 'unit' ? e.price.unitPrice : round(new D(e.price.total).div(q))
+  const gross = round(q.times(unitPrice))
+  const fee = costOf(e.fee, gross)
+  const tax = costOf(e.tax, gross)
+  const cash = e.side === 'buy' ? gross + fee + tax : gross - fee - tax
+  return { unitPrice, gross, fee, tax, cash, roundingDifference: e.price.mode === 'total' ? gross - e.price.total : 0 }
 }

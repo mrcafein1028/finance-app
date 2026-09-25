@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { mai } from '../test/personas'
 import { DomainError } from './errors'
-import { createPriceBook, positionAt, tradeCashFlow, valueHolding } from './investment'
+import { createPriceBook, positionAt, tradeAmounts, tradeCashFlow, valueHolding } from './investment'
 
 const p3 = mai()
 const fpt = p3.holdings[0]!
@@ -54,5 +54,27 @@ describe('giá vốn bình quân — P3 Mai (docs/08 §4)', () => {
     const pos = positionAt(btc, '2026-08-31')
     expect(pos.quantity.toString()).toBe('0.10125')
     expect(tradeCashFlow(btc, '2026-08-31')).toBe(-2_000_000)
+  })
+})
+
+describe('nhập lệnh: tổng tiền và phí / thuế theo %', () => {
+  it('bán 100 CCQ, tổng 2.600.000, phí 1,5%, thuế 0,1% → nhận 2.558.400', () => {
+    expect(tradeAmounts({ side: 'sell', quantity: '100', price: { mode: 'total', total: 2_600_000 }, fee: { mode: 'percent', rate: 0.015 }, tax: { mode: 'percent', rate: 0.001 } })).toEqual({
+      unitPrice: 26_000,
+      gross: 2_600_000,
+      fee: 39_000,
+      tax: 2_600,
+      cash: 2_558_400,
+      roundingDifference: 0,
+    })
+  })
+
+  it('mua 196,5 CCQ tổng 5 triệu: giá làm tròn 25.445 ₫, lệch 57 ₫ được báo ra; phí nhập theo số tiền', () => {
+    const r = tradeAmounts({ side: 'buy', quantity: '196.5', price: { mode: 'total', total: 5_000_000 }, fee: { mode: 'amount', amount: 0 }, tax: { mode: 'amount', amount: 0 } })
+    expect(r).toMatchObject({ unitPrice: 25_445, gross: 4_999_943, cash: 4_999_943, roundingDifference: -57 })
+  })
+
+  it('nhập theo giá / đơn vị như cũ: 1.000 cp × 120.000, phí 0,15%', () => {
+    expect(tradeAmounts({ side: 'buy', quantity: '1000', price: { mode: 'unit', unitPrice: 120_000 }, fee: { mode: 'percent', rate: 0.0015 }, tax: { mode: 'amount', amount: 0 } })).toMatchObject({ gross: 120_000_000, fee: 180_000, cash: 120_180_000 })
   })
 })

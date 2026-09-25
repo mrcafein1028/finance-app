@@ -86,6 +86,10 @@ Trên máy tính: thanh bên trái. Trên điện thoại: nút **☰** ở góc
 - **Quỹ mục tiêu**: đặt số tiền và ngày cần → app tính mỗi tháng cần góp bao nhiêu và dự báo ngày đạt theo tốc độ góp 3 tháng gần nhất.
 - **Đối soát số dư**: nhập *Số dư thực tế* → app tạo giao dịch *Điều chỉnh số dư* cho phần chênh (không tính vào chi tiêu).
 - **Lưu trữ** tài khoản không dùng nữa: lịch sử giữ nguyên, không còn hiện khi ghi giao dịch.
+- **Nhập sai?** Mọi loại tài khoản (kể cả sổ tiết kiệm, đầu tư, khoản vay, thẻ) có hàng *Sửa thông tin · Lưu trữ · Xóa…* ở cuối khung đầu trang:
+  - Sai **số dư ban đầu / ngày bắt đầu / thông tin** (hạn mức, lãi suất, ngày trả…) → **Sửa thông tin**. App kiểm tra lại cả lịch sử (dư nợ không âm, tiền mặt không âm, không có giao dịch trước ngày bắt đầu).
+  - Số dư đúng lúc đầu nhưng **lệch dần** so với ngân hàng → **Đối soát số dư**, không sửa số dư ban đầu.
+  - Nhập nhầm **cả tài khoản** → **Xóa…**: app liệt kê những gì sẽ mất (giao dịch, cả nhóm trả nợ, lệnh, dòng ngân sách, giao dịch định kỳ) trước khi xóa vĩnh viễn.
 
 ### 3.5 Tiết kiệm
 - **Mở sổ**: *Sổ mới — trích tiền từ tài khoản* hoặc *Sổ đã có từ trước*. Chọn kỳ hạn, lãi suất, cách nhận lãi (*Cuối kỳ*, *Hằng tháng*, *Trả trước*), xử lý khi đáo hạn (*Tái tục gốc, nhận lãi* / *Tái tục cả gốc lẫn lãi* / *Tất toán*).

@@ -44,9 +44,10 @@ GitHub (lưu mã nguồn)  ──── Vercel tự build mỗi lần GitHub tha
    - `20260924000002_storage.sql` — bucket lưu file
    - `20260925000003_transaction_groups.sql` — ghi/xóa nhóm giao dịch trong một lần (Giai đoạn 3)
    - `20260926000004_merge_category.sql` — gộp danh mục (Giai đoạn 7)
+   - `20260927000005_delete_account.sql` — xóa hẳn một tài khoản kèm dữ liệu liên quan
 5. Kiểm tra: menu **Table Editor** thấy 13 bảng (accounts, transactions, …), mỗi bảng có nhãn **RLS enabled**.
 
-> Các file migration phải chạy **đúng thứ tự tên file** và **mỗi file chỉ một lần**. Đã chạy 0001–0003 từ trước? Chỉ cần chạy thêm `…0004_merge_category.sql`. Chạy nhầm lần hai file 0001/0002 sẽ báo lỗi "already exists" — không hỏng gì, bỏ qua. File 0003, 0004 chạy lại an toàn (`create or replace`).
+> Các file migration phải chạy **đúng thứ tự tên file** và **mỗi file chỉ một lần**. Đã chạy các file cũ từ trước? Chỉ cần chạy file mới (VD `…0005_delete_account.sql`). Chạy nhầm lần hai file 0001/0002 sẽ báo lỗi "already exists" — không hỏng gì, bỏ qua. File 0003, 0004 chạy lại an toàn (`create or replace`).
 
 ### Cấu hình đăng nhập (Authentication)
 1. **Authentication → Sign In / Providers → Email**: bật *Email*, giữ *Confirm email* **bật** (người dùng phải xác nhận email).
@@ -107,6 +108,7 @@ npm run dev                  # http://localhost:5173
 | Không nhận được email | Giới hạn email mặc định của Supabase | Đợi 1 giờ, hoặc cấu hình SMTP riêng |
 | Lỗi "relation … does not exist" | Chưa chạy migration SQL | Chạy lại Bước 2.3–2.4 |
 | Lỗi "Could not find the function public.save_transaction_group" khi xóa/hoàn tác | Chưa chạy file `20260925000003_transaction_groups.sql` | Chạy file đó trong SQL Editor |
+| "Could not find the function public.delete_account_cascade" khi xóa tài khoản | Chưa chạy `20260927000005_delete_account.sql` | Chạy file đó trong SQL Editor |
 | "Could not find the function public.merge_category" khi gộp danh mục | Chưa chạy `20260926000004_merge_category.sql` | Chạy file đó trong SQL Editor |
 | Khôi phục / xóa toàn bộ tải một file JSON về máy thay vì lưu lên máy chủ | Storage chưa sẵn sàng (chưa chạy `…0002_storage.sql`) | Chạy file đó; file đã tải về máy vẫn là bản sao lưu hợp lệ |
 | Claude không kết nối được / trang đồng ý lỗi | Chưa bật OAuth Server, sai Authorization Path | docs/12 mục 5 |

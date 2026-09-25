@@ -26,10 +26,14 @@ test.afterEach(async () => {
 async function trade(page: Page, v: { side?: 'Bán'; quantity: string; price: string; fee: string; tax?: string; date: string }) {
   const d = page.getByRole('dialog', { name: 'Ghi lệnh' })
   if (v.side) await d.getByRole('radio', { name: v.side }).click()
-  await d.getByLabel('Số lượng').fill(v.quantity)
+  await d.getByLabel(/^Số lượng/).fill(v.quantity)
+  // Kịch bản gốc (docs/08) nhập giá / cp và phí, thuế bằng số tiền.
+  await d.getByRole('radiogroup', { name: 'Nhập giá theo' }).getByRole('radio', { name: /^Giá \// }).click()
   await d.getByLabel(/^Giá \//).fill(v.price)
-  await d.getByLabel('Phí').fill(v.fee)
-  if (v.tax) await d.getByLabel('Thuế').fill(v.tax)
+  await d.getByRole('radiogroup', { name: 'Cách nhập phí' }).getByRole('radio', { name: '₫' }).click()
+  await d.getByLabel(/^Phí/).fill(v.fee)
+  await d.getByRole('radiogroup', { name: 'Cách nhập thuế' }).getByRole('radio', { name: '₫' }).click()
+  await d.getByLabel(/^Thuế/).fill(v.tax ?? '0')
   await d.getByLabel('Ngày').fill(v.date)
   return d
 }
@@ -57,7 +61,8 @@ test('W10: nạp 300 tr → mua FPT 2 lần → giá 125.000 → bán 600 cp; ch
   await h.getByLabel('Mã', { exact: true }).fill('fpt')
   await h.getByRole('button', { name: 'Thêm và ghi lệnh' }).click()
   let d = await trade(page, { quantity: '1000', price: '120k', fee: '180k', date: '2026-08-05' })
-  await expect(d.getByRole('status')).toHaveText('Giá trị lệnh 120.000.000 ₫')
+  await expect(d.getByRole('status', { name: 'Tóm tắt lệnh' })).toContainText('Giá trị lệnh120.000.000 ₫')
+  await expect(d.getByRole('status', { name: 'Tóm tắt lệnh' })).toContainText('Tổng tiền phải trả120.180.000 ₫')
   await d.getByRole('button', { name: 'Lưu' }).click()
   await expect(d).toBeHidden()
 
@@ -85,7 +90,8 @@ test('W10: nạp 300 tr → mua FPT 2 lần → giá 125.000 → bán 600 cp; ch
   await expect(d.getByRole('alert')).toContainText('chỉ đang có 1500')
 
   d = await trade(page, { side: 'Bán', quantity: '600', price: '130k', fee: '117k', tax: '78k', date: '2026-08-31' })
-  await expect(d.getByRole('status')).toContainText('lãi/lỗ thực hiện ước tính +8.400.000 ₫')
+  await expect(d.getByRole('status', { name: 'Tóm tắt lệnh' })).toContainText('Lãi/lỗ thực hiện (trước phí, thuế)+8.400.000 ₫')
+  await expect(d.getByRole('status', { name: 'Tóm tắt lệnh' })).toContainText('Tiền thực nhận77.805.000 ₫') // 78.000.000 − 117.000 − 78.000
   await d.getByRole('button', { name: 'Lưu' }).click()
   await expect(d).toBeHidden()
   await expect(row).toContainText('900 cp')

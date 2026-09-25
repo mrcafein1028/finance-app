@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import type { FakeBackend } from './fake-backend'
-import { startApp } from './helpers'
+import { goTo, startApp } from './helpers'
 
 // W19 — đăng ký / đăng nhập / quên mật khẩu / đăng xuất, mô phỏng như người dùng thật.
 // Backend giả đang BẬT xác nhận email (như cấu hình khuyến nghị trên Supabase).
@@ -53,11 +53,12 @@ test('đăng nhập → quay lại đúng trang muốn vào → điều hướng
   await page.reload()
   await expect(page.getByRole('heading', { level: 1, name: 'Ngân sách' })).toBeVisible()
 
-  const nav = page.getByRole('navigation', { name: isMobile ? 'Điều hướng nhanh' : 'Điều hướng chính' })
-  await nav.getByRole('link', { name: 'Giao dịch' }).click()
+  await goTo(page, 'Giao dịch')
   await expect(page.getByRole('heading', { level: 1, name: 'Giao dịch' })).toBeVisible()
 
-  if (!isMobile) await expect(page.getByText('lan@example.com')).toBeVisible()
+  // Điện thoại: email và nút Đăng xuất nằm ở chân menu ☰.
+  if (isMobile) await page.getByRole('button', { name: 'Mở menu' }).click()
+  await expect(page.getByText('lan@example.com').filter({ visible: true })).toBeVisible()
   await page.getByRole('button', { name: 'Đăng xuất' }).click()
   await expect(page).toHaveURL(/\/login$/)
 

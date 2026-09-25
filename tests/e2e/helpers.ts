@@ -99,15 +99,11 @@ export async function seedData(backend: FakeBackend, userId: string, data: Parti
   return ids
 }
 
-/** Mở một trang qua thanh điều hướng như người dùng thật: thanh bên (desktop) hoặc thanh dưới + "Thêm" (mobile). */
+/** Mở một trang qua điều hướng như người dùng thật: thanh bên (desktop) hoặc nút ☰ → menu (điện thoại). */
 export async function goTo(page: Page, label: string) {
   if ((page.viewportSize()?.width ?? 1280) >= 768) {
     return page.getByRole('navigation', { name: 'Điều hướng chính' }).getByRole('link', { name: label, exact: true }).click()
   }
-  const quick = page.getByRole('navigation', { name: 'Điều hướng nhanh' })
-  await expect(quick).toBeVisible() // vừa tải lại trang: đợi khung app hiện rồi mới xét
-  const direct = quick.getByRole('link', { name: label, exact: true })
-  if (await direct.count()) return direct.click()
-  await quick.getByRole('button', { name: 'Thêm' }).click()
-  await quick.getByRole('list', { name: 'Trang khác' }).getByRole('link', { name: label, exact: true }).click()
+  await page.getByRole('button', { name: 'Mở menu' }).click()
+  await page.getByRole('navigation', { name: 'Menu điều hướng' }).getByRole('link', { name: label, exact: true }).click()
 }

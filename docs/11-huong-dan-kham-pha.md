@@ -97,7 +97,10 @@ Trên máy tính: thanh bên trái. Trên điện thoại: nút **☰** ở góc
 - Lãi trả hằng tháng được app tự ghi vào tài khoản nhận lãi.
 
 ### 3.6 Đầu tư
-- **Tài khoản đầu tư** (chứng khoán, chứng chỉ quỹ, vàng, crypto): thêm mã → ghi lệnh mua/bán với phí và thuế → **Cập nhật giá** → xem giá vốn trung bình, lãi/lỗ chưa thực hiện và đã thực hiện.
+- **Tài khoản đầu tư** (chứng khoán, chứng chỉ quỹ, vàng, crypto): thêm mã → ghi lệnh mua/bán → **Cập nhật giá** → xem giá vốn trung bình, lãi/lỗ chưa thực hiện và đã thực hiện.
+  - Ghi lệnh: nhập **Số lượng** và **Tổng tiền** (theo sao kê, trước phí thuế) — app tự tính giá / đơn vị; hoặc chuyển sang nhập **Giá / đơn vị**.
+  - **Phí** (phí giao dịch của công ty chứng khoán / phí mua, bán của quỹ) và **Thuế** (thuế thu nhập cá nhân 0,1% trên giá trị bán) nhập theo **%** hoặc **số tiền** (nút % / ₫). App nhớ mức % lần trước cho từng mã và loại lệnh — VD CCQ bán: phí 1,5%, thuế 0,1%.
+  - Phí + thuế ghi thành chi tiêu "Phí & thuế đầu tư" (không cộng vào giá vốn); khung tóm tắt cho thấy tiền thực trả / thực nhận.
 - Vị thế mua từ trước khi dùng app: tích **Vị thế đã có từ trước (không trừ tiền)**.
 - **Tài sản khác** (nhà, xe…): **Định giá lại** khi giá thay đổi; bán thì ghi tiền nhận về.
 

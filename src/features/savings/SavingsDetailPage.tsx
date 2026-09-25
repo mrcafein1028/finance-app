@@ -13,6 +13,8 @@ import type { AccountOf, DepositTerm } from '../../schemas'
 import { matureDeposit, withdrawEarly } from '../../services/savings'
 import { TransactionList } from '../transactions/TransactionList'
 import { useTransactionDialog } from '../transactions/transactionDialogContext'
+import { AccountAdmin } from '../accounts/AccountAdmin'
+import { EditDepositDialog } from './EditDepositDialog'
 
 type Deposit = AccountOf<'term_deposit'>
 const ACTIONS = { renew_principal: 'Tái tục gốc, nhận lãi', renew_with_interest: 'Tái tục cả gốc lẫn lãi', withdraw: 'Tất toán' } as const
@@ -22,7 +24,7 @@ export function SavingsDetailPage() {
   const { id } = useParams()
   const { data: view, isLoading, error } = useLedgerView()
   const txDialog = useTransactionDialog()
-  const [dialog, setDialog] = useState<'mature' | 'early' | null>(null)
+  const [dialog, setDialog] = useState<'mature' | 'early' | 'edit' | null>(null)
   if (isLoading) return <LoadingState />
   if (error || !view) return <ErrorState error={error} />
   const account = view.accountById.get(id ?? '')
@@ -81,7 +83,9 @@ export function SavingsDetailPage() {
             )}
           </div>
         )}
+        <AccountAdmin account={account} view={view} onEdit={() => setDialog('edit')} backTo="/savings" />
       </div>
+      {dialog === 'edit' && <EditDepositDialog account={account} view={view} onClose={() => setDialog(null)} />}
 
       <section>
         <h2 className="mb-2 text-lg font-semibold">Các kỳ gửi</h2>

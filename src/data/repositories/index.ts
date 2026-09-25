@@ -84,6 +84,9 @@ function createAccountsRepo(client: SupabaseClient) {
       base.parseMany(
         await fetchAll((f, t) => client.from('accounts').select('*').is('archived_at', null).order('sort_order').order('id').range(f, t)),
       ),
+    /** Xóa hẳn tài khoản cùng mọi giao dịch, lệnh, kỳ gửi, định giá, dòng ngân sách gắn với nó (một transaction). */
+    deleteCascade: async (id: string) =>
+      run<{ transactions: number; trades: number; recurring_rules: number }>(client.rpc('delete_account_cascade', { p_account: id })),
     byKind: async (kind: AccountKind) =>
       base.parseMany(await fetchAll((f, t) => client.from('accounts').select('*').eq('kind', kind).order('id').range(f, t))),
   }

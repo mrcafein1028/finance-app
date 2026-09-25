@@ -15,6 +15,8 @@ import { addHolding, deleteTrade, recordTrade, revalueAsset, sellOtherAsset, upd
 import { AccountOptions } from '../transactions/pickers'
 import { TransactionList } from '../transactions/TransactionList'
 import { useTransactionDialog } from '../transactions/transactionDialogContext'
+import { AccountAdmin } from '../accounts/AccountAdmin'
+import { EditInvestmentDialog, EditOtherAssetDialog } from './EditAssetDialogs'
 
 const ASSET_LABEL: Record<HoldingAssetType, string> = { stock: 'Cổ phiếu', fund: 'Chứng chỉ quỹ', gold: 'Vàng', crypto: 'Tiền mã hóa', bond: 'Trái phiếu', other: 'Khác' }
 const qty = (v: HoldingValuation) => v.position.quantity.toNumber().toLocaleString('vi-VN', { maximumFractionDigits: 8 })
@@ -34,6 +36,7 @@ function Investment({ account, view }: { account: Account; view: LedgerView }) {
   const invalidate = useInvalidate()
   const toast = useToast()
   const [dialog, setDialog] = useState<'holding' | 'trade' | 'prices' | null>(null)
+  const [editing, setEditing] = useState(false)
   const [tradeHolding, setTradeHolding] = useState<string>('')
   const valuations = view.ledger.holdingValuations(account, today())
   const holdingsValue = valuations.reduce((s, v) => s + v.marketValue, 0)
@@ -72,7 +75,9 @@ function Investment({ account, view }: { account: Account; view: LedgerView }) {
             Ghi cổ tức
           </Button>
         </div>
+        <AccountAdmin account={account} view={view} onEdit={() => setEditing(true)} backTo="/investments" />
       </div>
+      {editing && account.kind === 'investment' && <EditInvestmentDialog account={account} view={view} onClose={() => setEditing(false)} />}
 
       <section aria-label="Danh mục nắm giữ">
         <h2 className="mb-2 text-lg font-semibold">Đang nắm giữ</h2>
@@ -334,6 +339,7 @@ function OtherAsset({ account, view }: { account: Account; view: LedgerView }) {
   const invalidate = useInvalidate()
   const toast = useToast()
   const [dialog, setDialog] = useState<'revalue' | 'sell' | null>(null)
+  const [editing, setEditing] = useState(false)
   const [value, setValue] = useState('')
   const [date, setDate] = useState(today())
   const [note, setNote] = useState('')
@@ -360,7 +366,9 @@ function OtherAsset({ account, view }: { account: Account; view: LedgerView }) {
             </Button>
           </div>
         )}
+        <AccountAdmin account={account} view={view} onEdit={() => setEditing(true)} backTo="/investments" />
       </div>
+      {editing && account.kind === 'other_asset' && <EditOtherAssetDialog account={account} view={view} onClose={() => setEditing(false)} />}
       <section>
         <h2 className="mb-2 text-lg font-semibold">Lịch sử định giá</h2>
         <ul className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface text-sm">

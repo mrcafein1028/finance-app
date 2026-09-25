@@ -12,6 +12,7 @@ import { formatDate, formatMoney, formatPercent, parseMoneyInput, parsePercentIn
 import type { AccountOf, LoanRateType } from '../../schemas'
 import { createCreditCard, createLoan, isLoan, upcomingSchedule } from '../../services/liabilities'
 import { AccountOptions } from '../transactions/pickers'
+import { RATE_TYPES } from './labels'
 
 export function LiabilitiesPage() {
   const { data: view, isLoading, error } = useLedgerView()
@@ -106,13 +107,6 @@ export function LiabilitiesPage() {
     </section>
   )
 }
-
-const RATE_TYPES: { value: LoanRateType; label: string }[] = [
-  { value: 'equal_principal', label: 'Gốc đều, lãi giảm dần (vay nhà/xe)' },
-  { value: 'annuity', label: 'Trả đều mỗi tháng' },
-  { value: 'flat', label: 'Lãi phẳng trên gốc ban đầu (vay tiêu dùng)' },
-  { value: 'zero', label: 'Không lãi (vay người thân, trả góp 0%)' },
-]
 
 function LoanDialog({ view, onClose }: { view: LedgerView; onClose: () => void }) {
   const invalidate = useInvalidate()

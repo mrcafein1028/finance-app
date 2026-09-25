@@ -14,6 +14,8 @@ import { changeLoanRate, isLoan, prepayLoan, previewPrepayment, recordLoanPaymen
 import { AccountOptions } from '../transactions/pickers'
 import { TransactionList } from '../transactions/TransactionList'
 import { useTransactionDialog } from '../transactions/transactionDialogContext'
+import { AccountAdmin } from '../accounts/AccountAdmin'
+import { EditCardDialog, EditLoanDialog } from './EditLiabilityDialogs'
 
 const cashLike = (a: { kind: string }) => ['cash', 'bank', 'ewallet'].includes(a.kind)
 
@@ -32,6 +34,7 @@ export function LiabilityDetailPage() {
 function Loan({ loan, view }: { loan: LoanAccount; view: LedgerView }) {
   const txDialog = useTransactionDialog()
   const [dialog, setDialog] = useState<'pay' | 'prepay' | 'rate' | null>(null)
+  const [editing, setEditing] = useState(false)
   const [showAll, setShowAll] = useState(false)
   const now = today()
   const outstanding = view.balances.get(loan.id) ?? 0
@@ -86,7 +89,9 @@ function Loan({ loan, view }: { loan: LoanAccount; view: LedgerView }) {
             </Button>
           </div>
         )}
+        <AccountAdmin account={loan} view={view} onEdit={() => setEditing(true)} backTo="/liabilities" />
       </div>
+      {editing && <EditLoanDialog loan={loan} view={view} onClose={() => setEditing(false)} />}
 
       {rows.length > 0 && (
         <section aria-label="Lịch trả nợ">
@@ -281,6 +286,7 @@ function Card({ card, view }: { card: AccountOf<'credit_card'>; view: LedgerView
   const balance = Math.max(0, view.balances.get(card.id) ?? 0)
   const minimum = creditCardMinimumPayment(balance, card.details.minPaymentRate)
   const [payment, setPayment] = useState(String(minimum || ''))
+  const [editing, setEditing] = useState(false)
   const pay = parseMoneyInput(payment)
   const months = pay ? creditCardMonthsToPayoff(balance, card.details.annualRate, pay) : null
   const transactions = view.transactions.filter((t) => t.accountId === card.id || t.toAccountId === card.id)
@@ -322,7 +328,9 @@ function Card({ card, view }: { card: AccountOf<'credit_card'>; view: LedgerView
             Ghi chi tiêu / lãi, phí
           </Button>
         </div>
+        <AccountAdmin account={card} view={view} onEdit={() => setEditing(true)} backTo="/liabilities" />
       </div>
+      {editing && <EditCardDialog card={card} view={view} onClose={() => setEditing(false)} />}
       <section className="rounded-2xl border border-border bg-surface p-5">
         <h2 className="text-lg font-semibold">Bao lâu thì trả hết?</h2>
         <div className="mt-3 max-w-sm">

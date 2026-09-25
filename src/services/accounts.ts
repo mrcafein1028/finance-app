@@ -2,9 +2,11 @@ import type { Repositories } from '../data/repositories'
 import type { NewRecord } from '../data/repositories/base'
 import { ConflictError } from '../data/errors'
 import { formatMoney } from '../lib/format'
+import { addMonthsToKey } from '../domain/dates'
 import { nowIso } from '../lib/clock'
 import { KIND_META, type Account, type Transaction } from '../schemas'
 import type { AccountFormValues } from '../schemas/forms'
+import { historyProblem } from './accountEdit'
 
 /** Giá trị form F2 → dữ liệu account (tài khoản tiền / quỹ mục tiêu). */
 export function accountFromForm(values: AccountFormValues, sortOrder: number): NewRecord<Account> {
@@ -45,7 +47,15 @@ export async function updateAccount(repos: Repositories, account: Account, value
     throw new ConflictError(`Ngày bắt đầu phải trước hoặc bằng giao dịch đầu tiên của tài khoản (${first.split('-').reverse().join('/')})`)
   }
   const { sortOrder: _s, ...patch } = accountFromForm(values, account.sortOrder)
-  return repos.accounts.update(account.id, patch as Partial<NewRecord<Account>>)
+  const problem = historyProblem({ ...account, ...patch } as Account, transactions)
+  if (problem) throw new ConflictError(problem)
+  const saved = await repos.accounts.update(account.id, patch as Partial<NewRecord<Account>>)
+  if (values.openingBalance !== account.openingBalance || values.openingDate !== account.openingDate) {
+    // Số dư ban đầu là gốc của mọi số dư về sau → ảnh chụp net worth từ tháng đó phải tính lại.
+    const earliest = [account.openingDate, values.openingDate].sort()[0]!
+    await repos.snapshots.markStaleFrom(addMonthsToKey(earliest.slice(0, 7), -1))
+  }
+  return saved
 }
 
 /** Lưu trữ (W16): ẩn khỏi danh sách, vẫn nằm trong lịch sử net worth. */

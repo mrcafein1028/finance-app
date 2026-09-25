@@ -65,7 +65,7 @@ GitHub (lưu mã nguồn)  ──── Vercel tự build mỗi lần GitHub tha
 ## Bước 3 — Deploy lên Vercel
 
 1. Đăng nhập vercel.com bằng tài khoản GitHub → **Add New… → Project** → chọn repo vừa tạo → **Import**.
-2. Vercel tự nhận ra **Vite**: build command `npm run build`, output `dist`. Không cần sửa gì.
+2. Vercel tự nhận ra **Vite**: build command `npm run build`. Không cần sửa gì. Lệnh build tạo thư mục `.vercel/output/` (Build Output API) gồm web tĩnh **và** hàm `/api/mcp` cho Claude (docs/12) — Vercel dùng thẳng thư mục này; build log có dòng `✓ .vercel/output: web tĩnh + hàm /api/mcp`.
 3. Mở **Environment Variables**, thêm 2 biến:
    | Name | Value |
    |------|-------|
@@ -86,6 +86,7 @@ Từ nay mỗi lần bạn tải file mới lên GitHub, Vercel **tự build và
 6. **Cài đặt → Nạp dữ liệu demo…** chọn *Hùng* → Supabase **Storage → user-files → <id của bạn>/backups/** có 1 file sao lưu tự động (chứng tỏ migration storage đã chạy).
 7. **Cài đặt → Danh mục → Sửa "Giải trí" → Gộp…** vào "Mua sắm" → thành công (chứng tỏ migration 0004 đã chạy).
 8. **Cài đặt → Xóa toàn bộ dữ liệu…** → gõ `XÓA` → quay về hướng dẫn bắt đầu. Giờ bạn nhập số liệu thật.
+9. (Tùy chọn) Kết nối Claude: làm theo **docs/12 mục 2** (bật OAuth Server trong Supabase, thêm custom connector trên claude.ai).
 
 ## Chạy trên máy (tùy chọn, dành cho phát triển)
 
@@ -108,4 +109,5 @@ npm run dev                  # http://localhost:5173
 | Lỗi "Could not find the function public.save_transaction_group" khi xóa/hoàn tác | Chưa chạy file `20260925000003_transaction_groups.sql` | Chạy file đó trong SQL Editor |
 | "Could not find the function public.merge_category" khi gộp danh mục | Chưa chạy `20260926000004_merge_category.sql` | Chạy file đó trong SQL Editor |
 | Khôi phục / xóa toàn bộ tải một file JSON về máy thay vì lưu lên máy chủ | Storage chưa sẵn sàng (chưa chạy `…0002_storage.sql`) | Chạy file đó; file đã tải về máy vẫn là bản sao lưu hợp lệ |
+| Claude không kết nối được / trang đồng ý lỗi | Chưa bật OAuth Server, sai Authorization Path | docs/12 mục 5 |
 | Project Supabase "Paused" | Gói free tạm dừng sau 7 ngày không hoạt động | Dashboard → **Restore project** |

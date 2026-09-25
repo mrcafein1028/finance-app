@@ -120,7 +120,15 @@ Thử "nếu… thì…": để dành thêm mỗi tháng, tỉ lệ đem đầu 
 - **Tùy chọn**: giao diện Sáng / Tối / Theo hệ điều hành; ngày bắt đầu tháng (⚠️ đổi sẽ tính lại khoảng ngày của *mọi* tháng — giao dịch không bị sửa); cách lập ngân sách mặc định; mục tiêu quỹ khẩn cấp; tính lãi dồn tích vào net worth; cho phần chi vượt trừ vào tháng sau.
 - **Danh mục thu chi**: thêm, đổi tên, chuyển nhóm, đổi nhóm 50/30/20, **Lưu trữ**. **Xóa** chỉ được khi chưa dùng; đã dùng thì **Gộp…** vào danh mục khác (giao dịch, ngân sách, định kỳ chuyển theo, tổng chi không đổi). Danh mục *hệ thống* (lãi vay, phí, lãi tiết kiệm…) chỉ đổi được tên.
 - **Dữ liệu & sao lưu**: *Tải file sao lưu (JSON)*, *Xuất giao dịch (CSV)* mở bằng Excel, *Khôi phục từ file…*, *Nạp dữ liệu demo…*, *Xóa toàn bộ dữ liệu…* (gõ `XÓA` để xác nhận). Trước mọi thao tác thay thế/xóa, app **tự sao lưu** dữ liệu hiện tại lên máy chủ (hoặc tải về máy nếu không được).
+- **Kết nối Claude**: địa chỉ để thêm app làm *custom connector* trong Claude, danh sách ứng dụng đang có quyền và nút *Thu hồi* (xem mục 3.11).
 - **Tài khoản đăng nhập**: đổi mật khẩu, đăng xuất.
+
+### 3.11 Dùng cùng Claude
+Sau khi kết nối (docs/12), bạn trò chuyện với Claude trên web hoặc điện thoại:
+- *Gửi ảnh hóa đơn*: "Ghi giúp, trả bằng tiền mặt" → Claude đọc ảnh, tóm tắt khoản sẽ ghi, bạn đồng ý là xong. Gửi lại cùng hóa đơn → Claude được cảnh báo trùng.
+- *Hỏi*: "Tháng này tôi còn được tiêu bao nhiêu cho ăn uống?", "Xuất báo cáo tháng trước", "Vẽ net worth 6 tháng".
+- *Lập kế hoạch*: "Lập ngân sách tháng sau giống tháng này nhưng tăng ăn uống lên 4 triệu".
+- Giao dịch Claude ghi có thẻ `claude`; mọi kiểm tra (tiền mặt âm, vượt hạn mức, tháng đã đóng…) giống hệt khi bạn tự nhập.
 
 ---
 

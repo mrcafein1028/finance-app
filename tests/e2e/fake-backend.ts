@@ -1,8 +1,9 @@
-// Backend giả cho E2E: đóng vai Supabase (Auth + PostgREST) ngay trong Playwright, nhưng dữ liệu
-// nằm trong Postgres THẬT (PGlite) đã chạy đủ migration — RLS, CHECK, trigger, RPC đều có hiệu lực.
-// App không biết mình đang nói chuyện với backend giả: nó gọi supabase-js như thường.
+// Backend giả: đóng vai Supabase (Auth + PostgREST + Storage + OAuth 2.1 server) nhưng dữ liệu nằm
+// trong Postgres THẬT (PGlite) đã chạy đủ migration — RLS, CHECK, trigger, RPC đều có hiệu lực.
+// Dùng ở 2 nơi: E2E (chặn request của trình duyệt qua page.route) và test máy chủ MCP (qua `fetch`).
+// Ứng dụng không biết mình đang nói chuyện với backend giả: nó gọi supabase-js như thường.
 import type { PGlite } from '@electric-sql/pglite'
-import type { Page, Route } from '@playwright/test'
+import type { Page } from '@playwright/test'
 import { createMigratedDb, insertAuthUser } from '../support/pg'
 
 export const SUPABASE_URL = 'http://127.0.0.1:54321'
@@ -15,6 +16,27 @@ interface AuthUser {
   email: string
   password: string
   confirmed: boolean
+}
+
+export interface FakeResponse {
+  status: number
+  headers: Record<string, string>
+  body: string
+}
+
+interface OAuthClient {
+  id: string
+  name: string
+  uri: string
+  logo_uri: string
+}
+
+/** Một yêu cầu cấp quyền OAuth đang chờ người dùng đồng ý (Supabase tạo khi client gọi /oauth/authorize). */
+interface OAuthRequest {
+  client: OAuthClient
+  redirectUri: string
+  scope: string
+  state: string
 }
 
 const b64 = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url')
@@ -43,6 +65,9 @@ export class FakeBackend {
   readonly files = new Map<string, string>()
   /** Giả lập Storage lỗi (VD chưa chạy migration storage) để kiểm tra đường dự phòng. */
   storageDown = false
+  /** OAuth 2.1 server: yêu cầu đang chờ đồng ý, và quyền đã cấp theo người dùng → client. */
+  private oauthRequests = new Map<string, OAuthRequest>()
+  readonly oauthGrants = new Map<string, Map<string, { client: OAuthClient; scopes: string[]; granted_at: string }>>()
 
   private constructor(
     readonly db: PGlite,
@@ -79,40 +104,68 @@ export class FakeBackend {
     return this.asUser(userId, async (tx) => (await tx.query<{ r: Json }>(`select to_jsonb(t) as r from (${sql}) t`, params)).rows.map((x) => x.r))
   }
 
-  // ---------------------------------------------------------------- cài vào trang
-
-  async install(page: Page) {
-    await page.route(`${SUPABASE_URL}/**`, (route) => this.handle(route))
+  /** Token truy cập như Supabase OAuth server cấp cho một client (VD Claude) sau khi người dùng đồng ý. */
+  issueAccessToken(email: string, clientId?: string): string {
+    const u = this.users.get(email)
+    if (!u) throw new Error(`Chưa có người dùng ${email}`)
+    return this.session(u, clientId).access_token
   }
 
-  private async handle(route: Route) {
-    const request = route.request()
-    const url = new URL(request.url())
-    const method = request.method()
-    let body: unknown
-    try {
-      body = request.postDataJSON()
-    } catch {
-      body = null // GET hoặc body không phải JSON
+  /** Mô phỏng Claude gọi /oauth/authorize: Supabase tạo yêu cầu và chuyển người dùng tới trang đồng ý của app. */
+  createAuthorizationRequest(client: { name: string; uri?: string }, redirectUri: string, scope = 'email'): { authorizationId: string; clientId: string } {
+    const authorizationId = crypto.randomUUID()
+    const oauthClient: OAuthClient = { id: `client-${authorizationId.slice(0, 8)}`, name: client.name, uri: client.uri ?? '', logo_uri: '' }
+    this.oauthRequests.set(authorizationId, { client: oauthClient, redirectUri, scope, state: `state-${authorizationId.slice(0, 8)}` })
+    return { authorizationId, clientId: oauthClient.id }
+  }
+
+  // ---------------------------------------------------------------- cổng vào
+
+  async install(page: Page) {
+    await page.route(`${SUPABASE_URL}/**`, async (route) => {
+      const request = route.request()
+      const res = await this.respond(request.method(), request.url(), await request.allHeaders(), request.postData())
+      await route.fulfill({ status: res.status, headers: res.headers, body: res.body })
+    })
+  }
+
+  /** `fetch` trỏ vào backend giả — truyền cho supabase-js (`global.fetch`) khi chạy ngoài trình duyệt. */
+  readonly fetch = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+    const request = new Request(input, init)
+    const headers = Object.fromEntries([...request.headers.entries()].map(([k, v]) => [k.toLowerCase(), v]))
+    const text = request.method === 'GET' || request.method === 'HEAD' ? null : await request.text()
+    const res = await this.respond(request.method, request.url, headers, text || null)
+    return new Response(res.status === 204 ? null : res.body, { status: res.status, headers: res.headers })
+  }
+
+  /** Xử lý một request HTTP tới "Supabase" — không phụ thuộc Playwright. */
+  async respond(method: string, rawUrl: string, headers: Record<string, string>, rawBody: string | null): Promise<FakeResponse> {
+    const url = new URL(rawUrl)
+    let body: unknown = null
+    if (rawBody) {
+      try {
+        body = JSON.parse(rawBody)
+      } catch {
+        body = null // body không phải JSON (VD file tải lên Storage)
+      }
     }
     this.calls.push({ method, path: url.pathname + url.search, body })
-    const headers = await request.allHeaders()
     try {
-      if (url.pathname.startsWith('/auth/v1/')) return await this.auth(route, url, method, body, headers)
-      if (url.pathname.startsWith('/rest/v1/')) return await this.rest(route, url, method, body, headers)
-      if (url.pathname.startsWith('/storage/v1/object/') && method === 'POST') return this.storageUpload(route, url, request.postData() ?? '', headers)
+      if (url.pathname.startsWith('/auth/v1/')) return await this.auth(url, method, body, headers)
+      if (url.pathname.startsWith('/rest/v1/')) return await this.rest(url, method, body, headers)
+      if (url.pathname.startsWith('/storage/v1/object/') && method === 'POST') return this.storageUpload(url, rawBody ?? '', headers)
       throw new HttpError(404, { message: `Không giả lập ${url.pathname}` })
     } catch (e) {
-      if (e instanceof HttpError) return json(route, e.status, e.body)
+      if (e instanceof HttpError) return json(e.status, e.body)
       const pg = e as { code?: string; message: string }
-      return json(route, statusOf(pg), { code: pg.code ?? 'XX000', message: pg.message, details: null, hint: null })
+      return json(statusOf(pg), { code: pg.code ?? 'XX000', message: pg.message, details: null, hint: null })
     }
   }
 
   // ---------------------------------------------------------------- Storage
 
   /** Chính sách giống migration storage: chỉ ghi được vào thư mục <user_id>/ của mình, không ghi đè. */
-  private storageUpload(route: Route, url: URL, content: string, headers: Record<string, string>) {
+  private storageUpload(url: URL, content: string, headers: Record<string, string>): FakeResponse {
     if (this.storageDown) throw new HttpError(500, { statusCode: '500', error: 'internal', message: 'Storage không khả dụng' })
     const key = decodeURIComponent(url.pathname.replace('/storage/v1/object/', ''))
     const [bucket, folder] = key.split('/')
@@ -120,7 +173,7 @@ export class FakeBackend {
     if (bucket !== 'user-files' || !uid || folder !== uid) throw new HttpError(403, { statusCode: '403', error: 'Unauthorized', message: 'new row violates row-level security policy' })
     if (this.files.has(key)) throw new HttpError(409, { statusCode: '409', error: 'Duplicate', message: 'The resource already exists' })
     this.files.set(key, content)
-    return json(route, 200, { Key: key, Id: crypto.randomUUID() })
+    return json(200, { Key: key, Id: crypto.randomUUID() })
   }
 
   // ---------------------------------------------------------------- Auth (GoTrue)
@@ -139,9 +192,10 @@ export class FakeBackend {
     }
   }
 
-  private session(u: AuthUser) {
+  private session(u: AuthUser, clientId?: string) {
     const expiresAt = Math.floor(Date.now() / 1000) + 3600
-    const accessToken = [b64({ alg: 'HS256', typ: 'JWT' }), b64({ sub: u.id, email: u.email, role: 'authenticated', aud: 'authenticated', exp: expiresAt }), 'sig'].join('.')
+    const claims = { sub: u.id, email: u.email, role: 'authenticated', aud: 'authenticated', exp: expiresAt, ...(clientId ? { client_id: clientId } : {}) }
+    const accessToken = [b64({ alg: 'HS256', typ: 'JWT' }), b64(claims), 'sig'].join('.')
     const refresh = `refresh-${crypto.randomUUID()}`
     this.refreshTokens.set(refresh, u.email)
     return { access_token: accessToken, token_type: 'bearer', expires_in: 3600, expires_at: expiresAt, refresh_token: refresh, user: this.userJson(u) }
@@ -152,7 +206,7 @@ export class FakeBackend {
     return [...this.users.values()].find((u) => u.id === sub) ?? null
   }
 
-  private async auth(route: Route, url: URL, method: string, body: unknown, headers: Record<string, string>) {
+  private async auth(url: URL, method: string, body: unknown, headers: Record<string, string>): Promise<FakeResponse> {
     const path = url.pathname.replace('/auth/v1', '')
     const b = (body ?? {}) as { email?: string; password?: string; refresh_token?: string }
 
@@ -160,40 +214,72 @@ export class FakeBackend {
       const existing = this.users.get(b.email!)
       if (existing) {
         // Supabase khi bật xác nhận email: không báo lỗi, trả user không có identity.
-        if (!this.options.autoConfirm) return json(route, 200, this.userJson(existing, false))
+        if (!this.options.autoConfirm) return json(200, this.userJson(existing, false))
         throw new HttpError(422, { code: 'user_already_exists', error_code: 'user_already_exists', msg: 'User already registered' })
       }
       const id = await insertAuthUser(this.db, b.email!)
       const user: AuthUser = { id, email: b.email!, password: b.password!, confirmed: this.options.autoConfirm }
       this.users.set(user.email, user)
-      return json(route, 200, this.options.autoConfirm ? this.session(user) : this.userJson(user))
+      return json(200, this.options.autoConfirm ? this.session(user) : this.userJson(user))
     }
     if (path === '/token' && url.searchParams.get('grant_type') === 'password') {
       const u = this.users.get(b.email!)
       if (!u || u.password !== b.password) throw new HttpError(400, { code: 'invalid_credentials', error_code: 'invalid_credentials', msg: 'Invalid login credentials' })
       if (!u.confirmed) throw new HttpError(400, { code: 'email_not_confirmed', error_code: 'email_not_confirmed', msg: 'Email not confirmed' })
-      return json(route, 200, this.session(u))
+      return json(200, this.session(u))
     }
     if (path === '/token' && url.searchParams.get('grant_type') === 'refresh_token') {
       const email = this.refreshTokens.get(b.refresh_token!)
       const u = email ? this.users.get(email) : undefined
       if (!u) throw new HttpError(400, { code: 'refresh_token_not_found', msg: 'Invalid Refresh Token' })
-      return json(route, 200, this.session(u))
+      return json(200, this.session(u))
     }
     if (path === '/user') {
       const u = this.userFromHeaders(headers)
       if (!u) throw new HttpError(401, { code: 'no_authorization', msg: 'Unauthorized' })
       if (method === 'PUT' && b.password) u.password = b.password
-      return json(route, 200, this.userJson(u))
+      return json(200, this.userJson(u))
     }
-    if (path === '/logout') return route.fulfill({ status: 204, headers: CORS })
-    if (path === '/recover') return json(route, 200, {})
+    if (path === '/logout') return empty(204)
+    if (path === '/recover') return json(200, {})
+
+    // OAuth 2.1 server (trang đồng ý của app + quản lý quyền đã cấp) — giống API mà supabase-js gọi.
+    const authz = /^\/oauth\/authorizations\/([^/]+)(\/consent)?$/.exec(path)
+    if (authz) {
+      const u = this.userFromHeaders(headers)
+      if (!u) throw new HttpError(401, { code: 'no_authorization', msg: 'Unauthorized' })
+      const request = this.oauthRequests.get(authz[1]!)
+      if (!request) throw new HttpError(404, { code: 'oauth_authorization_not_found', msg: 'Authorization not found or expired' })
+      const redirect = (params: Record<string, string>) => `${request.redirectUri}?${new URLSearchParams({ ...params, state: request.state })}`
+      if (!authz[2] && method === 'GET') {
+        if (this.oauthGrants.get(u.id)?.has(request.client.id)) return json(200, { redirect_url: redirect({ code: `code-${authz[1]}` }) })
+        return json(200, { authorization_id: authz[1], redirect_uri: request.redirectUri, client: request.client, user: { id: u.id, email: u.email }, scope: request.scope })
+      }
+      if (authz[2] && method === 'POST') {
+        this.oauthRequests.delete(authz[1]!)
+        if ((body as { action?: string } | null)?.action !== 'approve') return json(200, { redirect_url: redirect({ error: 'access_denied' }) })
+        const grants = this.oauthGrants.get(u.id) ?? new Map()
+        grants.set(request.client.id, { client: request.client, scopes: request.scope.split(' '), granted_at: '2026-09-25T03:00:00Z' })
+        this.oauthGrants.set(u.id, grants)
+        return json(200, { redirect_url: redirect({ code: `code-${authz[1]}` }) })
+      }
+    }
+    if (path === '/user/oauth/grants') {
+      const u = this.userFromHeaders(headers)
+      if (!u) throw new HttpError(401, { code: 'no_authorization', msg: 'Unauthorized' })
+      const grants = this.oauthGrants.get(u.id) ?? new Map()
+      if (method === 'GET') return json(200, [...grants.values()])
+      if (method === 'DELETE') {
+        grants.delete(url.searchParams.get('client_id') ?? '')
+        return empty(204)
+      }
+    }
     throw new HttpError(404, { message: `Auth giả chưa hỗ trợ ${method} ${path}` })
   }
 
   // ---------------------------------------------------------------- PostgREST
 
-  private async rest(route: Route, url: URL, method: string, body: unknown, headers: Record<string, string>) {
+  private async rest(url: URL, method: string, body: unknown, headers: Record<string, string>): Promise<FakeResponse> {
     const uid = subject(headers)
     const path = url.pathname.replace('/rest/v1/', '')
     const prefer = headers['prefer'] ?? ''
@@ -249,16 +335,16 @@ export class FakeBackend {
     })
 
     if ('rpcResult' in result) {
-      return result.rpcResult === undefined ? route.fulfill({ status: 204, headers: CORS }) : json(route, 200, result.rpcResult)
+      return result.rpcResult === undefined ? empty(204) : json(200, result.rpcResult)
     }
     if (wantsObject) {
       if (result.rows.length !== 1) {
         throw new HttpError(406, { code: 'PGRST116', message: 'JSON object requested, multiple (or no) rows returned', details: `The result contains ${result.rows.length} rows`, hint: null })
       }
-      return json(route, result.status, result.rows[0])
+      return json(result.status, result.rows[0])
     }
-    if (!result.always && !representation) return route.fulfill({ status: result.status === 201 ? 201 : 204, headers: CORS })
-    return json(route, result.status, result.rows)
+    if (!result.always && !representation) return empty(result.status === 201 ? 201 : 204)
+    return json(result.status, result.rows)
   }
 
   private async rpc(tx: Tx, fn: string, args: Json): Promise<{ rpcResult: unknown }> {
@@ -288,8 +374,12 @@ export class FakeBackend {
 
 const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*' }
 
-function json(route: Route, status: number, body: unknown) {
-  return route.fulfill({ status, contentType: 'application/json', headers: CORS, body: JSON.stringify(body) })
+function json(status: number, body: unknown): FakeResponse {
+  return { status, headers: { ...CORS, 'content-type': 'application/json' }, body: JSON.stringify(body) }
+}
+
+function empty(status: number): FakeResponse {
+  return { status, headers: CORS, body: '' }
 }
 
 /** sub trong JWT của header Authorization (publishable key không phải JWT → khách). */

@@ -9,7 +9,7 @@ Web app giúp một người (hoặc một hộ gia đình) **lập ngân sách 
 | Thành phần | Dịch vụ | Vai trò |
 |------------|---------|---------|
 | Mã nguồn | **GitHub** | Lưu trữ, Vercel đọc từ đây |
-| Web | **Vercel** (free) | Build `npm run build` và phục vụ thư mục `dist/` |
+| Web + máy chủ MCP | **Vercel** (free) | Build `npm run build` → `.vercel/output`: web tĩnh + hàm `/api/mcp` cho Claude |
 | Dữ liệu, đăng nhập, file | **Supabase** (free) | Postgres + Row Level Security, Auth (email/mật khẩu), Storage |
 
 👉 Hướng dẫn từng bước: **[docs/10-trien-khai.md](docs/10-trien-khai.md)**
@@ -21,14 +21,17 @@ Web app giúp một người (hoặc một hộ gia đình) **lập ngân sách 
 │   ├── schemas/        Zod schema: 1 nguồn cho kiểu TS, validate form, file sao lưu
 │   ├── domain/         Công thức tính toán thuần: ngân sách, tiết kiệm, vay, đầu tư, net worth, insight
 │   ├── data/           Supabase client, repositories, hook truy vấn, sao lưu, lỗi, danh mục mẫu, dữ liệu demo
-│   ├── services/       Nghiệp vụ nhiều bước: giao dịch, ngân sách, định kỳ, tiết kiệm, đầu tư, nợ, snapshot, cài đặt/sao lưu
+│   ├── services/       Nghiệp vụ nhiều bước: giao dịch, ngân sách, định kỳ, tiết kiệm, đầu tư, nợ, snapshot, cài đặt/sao lưu, tổng quan
+│   ├── mcp/            Máy chủ MCP cho Claude (custom connector): 15 công cụ đọc/ghi, OAuth qua Supabase, hàm Vercel
 │   ├── features/       Từng màn hình: overview, budget, transactions, recurring, accounts, savings, investments, liabilities, reports, whatif, settings…
 │   ├── components/     UI dùng chung, layout
 │   └── lib/            Định dạng tiền/ngày, đồng hồ, theme
 ├── supabase/migrations/  SQL chạy trên Supabase (bảng, ràng buộc, RLS, trigger, storage)
+├── scripts/            build-vercel-output.mjs: gói web + hàm /api/mcp thành .vercel/output
 ├── tests/
 │   ├── db/             Test SQL thật trên Postgres nhúng (PGlite): ràng buộc, RLS, khôi phục
 │   ├── e2e/            Playwright: mô phỏng người dùng thật trên desktop + điện thoại, backend giả chạy Postgres thật
+│   ├── mcp/            Máy chủ MCP: gọi công cụ như Claude thật, chạy cả file đã gói cho Vercel
 │   └── support/        PGlite chạy toàn bộ migration (dùng chung cho db và e2e)
 ├── docs/               Phân tích, thiết kế, triển khai, hướng dẫn người dùng (+ anh/ ảnh chụp màn hình)
 ├── vercel.json         Cấu hình Vercel (SPA rewrites)
@@ -63,6 +66,7 @@ npm run typecheck && npm run lint && npm run build
 | 09 | [Lộ trình xây dựng](docs/09-lo-trinh.md) | Các giai đoạn, tiêu chí hoàn thành |
 | 10 | [Triển khai](docs/10-trien-khai.md) | GitHub → Supabase → Vercel, xử lý sự cố |
 | 11 | [Hướng dẫn khám phá](docs/11-huong-dan-kham-pha.md) | Cho người dùng: tour từng màn hình, chu kỳ 1 tháng, dữ liệu demo, FAQ |
+| 12 | [Kết nối Claude](docs/12-ket-noi-claude.md) | MCP, OAuth, bảo mật; cài custom connector; công cụ; xử lý sự cố |
 
 ## Nguyên tắc cốt lõi
 

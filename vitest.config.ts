@@ -2,7 +2,7 @@ import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   test: {
-    include: ['src/**/*.test.ts', 'tests/db/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'tests/db/**/*.test.ts', 'tests/mcp/**/*.test.ts'],
     environment: 'node',
     // Test DB khởi động Postgres (PGlite) — cần nhiều thời gian hơn mặc định.
     testTimeout: 30_000,

@@ -37,6 +37,14 @@ describe('dữ liệu demo & file sao lưu', () => {
     const dates = backup.data.transactions.map((t) => t.date)
     expect(dates.filter((d) => d <= '2026-12-31')).toHaveLength(lan().transactions.length) // tháng chính = tháng 12
     expect(dates.every((d) => d >= '2026-12-01' && d <= '2027-01-20')).toBe(true) // + tháng này đến hôm nay
+    // Không tài khoản tiền nào bị âm vào hôm nay (tháng này chép cả rút ATM, góp quỹ).
+    const balance = new Map(backup.data.accounts.map((a) => [a.id, a.openingBalance]))
+    for (const t of backup.data.transactions) {
+      const out = t.type === 'expense' || t.type === 'transfer' ? -t.amount : t.amount
+      balance.set(t.accountId, balance.get(t.accountId)! + out)
+      if (t.type === 'transfer') balance.set(t.toAccountId, balance.get(t.toAccountId)! + t.amount)
+    }
+    expect([...balance.values()].every((v) => v >= 0)).toBe(true)
     expect(backup.data.settings[0]!.onboardingCompleted).toBe(true)
     const again = readBackupText(JSON.stringify(backup))
     expect(summarizeBackup(again).find((r) => r.table === 'transactions')!.count).toBe(dates.length)

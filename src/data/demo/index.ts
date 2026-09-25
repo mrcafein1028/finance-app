@@ -4,7 +4,7 @@ import { periodOf, previousMonth } from '../../domain/period'
 import { budgetTargetKey, TABLE_NAMES, type BackupFile, type BudgetTarget, type TableName } from '../../schemas'
 import { buildBackup } from '../backup'
 import { DEFAULT_SETTINGS } from '../repositories'
-import { hung, lan, line, mai, budgetMonth } from './personas'
+import { budgetMonth, expense, hung, income, lan, line, mai, makeAccount } from './personas'
 
 // Dữ liệu mẫu cho người mới khám phá app (docs/09 Giai đoạn 8): 3 persona của docs/08, dời ngày
 // để tháng "chính" của persona rơi vào tháng vừa kết thúc — trông như dữ liệu thật của bạn.
@@ -58,7 +58,17 @@ function rawData(persona: DemoPersona): Record<string, object[]> {
   }
   if (persona === 'hung') {
     const p = hung()
-    return { accounts: p.accounts, categories: p.categories, transactions: [p.openDeposit, ...p.payment1], depositTerms: [p.term1] }
+    const c = p.categoryId
+    // Bản demo thêm căn hộ (tài sản đối ứng khoản vay) và lương + sinh hoạt 2 tháng, để net worth và
+    // các chỉ số giống một người vừa vay mua nhà thật (docs/08 chỉ kiểm thử phần vay và sổ tiết kiệm).
+    const flat = makeAccount('other_asset', 'flat', 'Căn hộ', 1_650_000_000, '2026-08-01', { note: 'Mua bằng khoản vay BIDV + tiền tích lũy' })
+    const living = ['2026-08', '2026-09'].flatMap((m) => [
+      income(`${m}-05`, 45_000_000, 'vcb', c('Lương')),
+      expense(`${m}-06`, 6_000_000, 'vcb', c('Ăn uống')),
+      expense(`${m}-12`, 2_500_000, 'vcb', c('Hóa đơn & tiện ích')),
+      expense(`${m}-18`, 1_500_000, 'vcb', c('Đi lại')),
+    ])
+    return { accounts: [...p.accounts, flat], categories: p.categories, transactions: [p.openDeposit, ...p.payment1, ...living], depositTerms: [p.term1] }
   }
   const p = mai()
   return {
@@ -83,9 +93,10 @@ export function buildDemoBackup(persona: DemoPersona, today: string, periodStart
     data[table] = rows!.map((r) => transform(r, offset, ids) as object)
   }
   if (persona === 'lan') {
-    // Tháng hiện tại: lặp lại thu chi tháng trước đến hôm nay → ngân sách tháng này có tiến độ để xem.
+    // Tháng hiện tại: lặp lại thu, chi và chuyển khoản (rút ATM, góp quỹ) của tháng trước đến hôm nay
+    // → ngân sách tháng này có tiến độ để xem. Thiếu chuyển khoản thì ví tiền mặt sẽ bị âm.
     const repeat = (data.transactions as { type: string; date: string; id: string; createdAt: string }[])
-      .filter((t) => t.type === 'income' || t.type === 'expense')
+      .filter((t) => t.type === 'income' || t.type === 'expense' || t.type === 'transfer')
       .map((t) => ({ ...t, id: crypto.randomUUID(), date: addMonths(t.date, 1) }))
       .filter((t) => t.date <= today)
     data.transactions = [...data.transactions, ...repeat]

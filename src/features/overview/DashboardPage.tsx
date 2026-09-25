@@ -10,8 +10,7 @@ import { topInsights, type Indicator, type Insight, type Rating } from '../../do
 import { netWorthSeries, recentMonths } from '../../domain/reports'
 import { formatDate, formatMoney, formatPercent, monthLabel } from '../../lib/format'
 import { readPref, writePref } from '../../lib/prefs'
-import type { AccountOf } from '../../schemas'
-import { isLoan, upcomingSchedule } from '../../services/liabilities'
+import { upcomingItems } from '../../services/overview'
 import { pendingOccurrences } from '../../services/recurring'
 import { describeTransaction } from '../transactions/describe'
 import { useTransactionDialog } from '../transactions/transactionDialogContext'
@@ -236,38 +235,10 @@ function InsightsCard({ data }: { data: Overview }) {
   )
 }
 
-interface UpcomingItem {
-  date: string
-  label: string
-  amount: number
-  href: string
-  overdue?: boolean
-}
-
 function UpcomingCard({ data }: { data: Overview }) {
   const rules = useRecurringRules().data ?? []
-  const { view, now } = data
-  const horizon = addDays(now, 7)
-  const items: UpcomingItem[] = []
-  for (const loan of view.accounts.filter(isLoan).filter((a) => !a.archivedAt)) {
-    const next = upcomingSchedule(loan, view.transactions, now)[0]
-    if (next && next.dueDate <= horizon) items.push({ date: next.dueDate, label: `Trả nợ ${loan.name}`, amount: next.payment, href: `/liabilities/${loan.id}`, overdue: next.dueDate < now })
-  }
-  for (const d of data.insightContext.deposits ?? []) {
-    if (d.maturityDate <= horizon) items.push({ date: d.maturityDate, label: `Đáo hạn sổ tại ${d.bankName}`, amount: d.principal + d.expectedInterest, href: `/savings/${d.accountId}`, overdue: d.maturityDate < now })
-  }
-  for (const card of view.accounts.filter((a): a is AccountOf<'credit_card'> => a.kind === 'credit_card' && !a.archivedAt)) {
-    const due = [now.slice(0, 8) + String(card.details.dueDay).padStart(2, '0'), addDays(now, 31).slice(0, 8) + String(card.details.dueDay).padStart(2, '0')].find((d) => d >= now)
-    const balance = view.balances.get(card.id) ?? 0
-    if (due && due <= horizon && balance > 0) items.push({ date: due, label: `Hạn thanh toán ${card.name}`, amount: balance, href: `/liabilities/${card.id}` })
-  }
-  for (const rule of rules) {
-    if (!rule.pausedAt && rule.nextDate > now && rule.nextDate <= horizon && (!rule.endDate || rule.nextDate <= rule.endDate)) {
-      items.push({ date: rule.nextDate, label: rule.name, amount: rule.template.amount, href: '/transactions/recurring' })
-    }
-  }
-  const pending = pendingOccurrences(rules, now)
-  items.sort((a, b) => a.date.localeCompare(b.date))
+  const items = upcomingItems(data, rules, 7)
+  const pending = pendingOccurrences(rules, data.now)
 
   return (
     <div className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5">

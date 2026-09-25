@@ -12,6 +12,7 @@ import { resetPasswordSchema, type ResetPasswordInput } from '../../schemas/auth
 import { useAuth } from '../auth/authContext'
 import { authErrorMessage } from '../auth/authErrors'
 import { CategoriesSection } from './CategoriesSection'
+import { ClaudeSection } from './ClaudeSection'
 import { DataSection } from './DataSection'
 
 const card = 'flex flex-col gap-4 rounded-2xl border border-border bg-surface p-5'
@@ -27,6 +28,7 @@ export function SettingsPage() {
       <PreferencesSection key={settings.periodStartDay + settings.theme + settings.defaultBudgetMode} settings={settings} />
       <CategoriesSection />
       <DataSection />
+      <ClaudeSection />
       <AccountSection />
     </section>
   )

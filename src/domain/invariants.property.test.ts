@@ -138,6 +138,14 @@ describe('bất biến lịch trả nợ', () => {
       { numRuns: 300 },
     )
   })
+
+  it('4b. ca fast-check tìm ra: 1.000.024 ₫, 29,7%/năm, 316 tháng trả góp đều → đủ 316 kỳ, không hết nợ sớm do làm tròn', () => {
+    const rows = buildSchedule({ rateType: 'annuity', ratePeriods: [{ from: '2026-01-01', annualRate: 0.297 }], originalPrincipal: 1_000_024, startDate: '2026-01-01', paymentDay: 15, termMonths: 316 })
+    expect(rows).toHaveLength(316)
+    expect(sum(rows.map((r) => r.principal))).toBe(1_000_024)
+    expect(rows.at(-1)!.closingBalance).toBe(0)
+    expect(rows.every((r) => r.principal > 0 && r.openingBalance - r.principal === r.closingBalance)).toBe(true)
+  })
 })
 
 describe('bất biến chia tiền', () => {

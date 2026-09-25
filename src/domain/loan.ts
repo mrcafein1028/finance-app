@@ -111,6 +111,12 @@ export function buildSchedule(terms: LoanTerms, options: ScheduleOptions = {}): 
       else if (previousRate !== annualRate) payment = annuityPayment(balance, annualRate, periods - j) // đổi lãi → tính lại PMT
       principal = payment - interest
       if (principal <= 0) throw new DomainError('negative_amortization', 'Khoản trả không đủ trả lãi — dư nợ không giảm')
+      // PMT làm tròn tới đồng trả dư < 1 đồng/kỳ; với lãi cao và kỳ hạn dài, phần dư đó lãi kép lên đủ để
+      // trả hết nợ TRƯỚC kỳ cuối của hợp đồng. Khi đó chia lại số dư còn lại cho đúng số kỳ còn lại.
+      if (options.fixedPayment === undefined && !isLastPlanned && principal >= balance) {
+        payment = annuityPayment(balance, annualRate, periods - j)
+        principal = payment - interest
+      }
     } else if (options.fixedPrincipal !== undefined) {
       principal = options.fixedPrincipal
     } else {

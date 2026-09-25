@@ -12,6 +12,7 @@ import { LoginPage } from './features/auth/LoginPage'
 import { RedirectIfAuthenticated, RequireAuth } from './features/auth/RequireAuth'
 import { ResetPasswordPage } from './features/auth/ResetPasswordPage'
 import { SignupPage } from './features/auth/SignupPage'
+import { ConsentPage } from './features/oauth/ConsentPage'
 import { OnboardingPage } from './features/onboarding/OnboardingPage'
 import { RedirectIfOnboarded, RequireOnboarding } from './features/onboarding/RequireOnboarding'
 import { TransactionDialogProvider } from './features/transactions/TransactionDialogProvider'
@@ -63,6 +64,8 @@ export default function App() {
       <Route path="/signup" element={<RedirectIfAuthenticated><SignupPage /></RedirectIfAuthenticated>} />
       <Route path="/forgot-password" element={<RedirectIfAuthenticated><ForgotPasswordPage /></RedirectIfAuthenticated>} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      {/* Trang đồng ý OAuth: Supabase chuyển người dùng tới đây khi Claude xin quyền (docs/12). */}
+      <Route path="/oauth/consent" element={<RequireAuth><ConsentPage /></RequireAuth>} />
       <Route path="/onboarding" element={<RequireAuth><RedirectIfOnboarded><OnboardingPage /></RedirectIfOnboarded></RequireAuth>} />
 
       <Route

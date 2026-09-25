@@ -1,22 +1,8 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo } from 'react'
-import { createLedger, type Ledger } from '../domain/networth'
 import { today } from '../lib/clock'
-import type {
-  Account,
-  AssetValuation,
-  BudgetLine,
-  BudgetMonth,
-  Category,
-  DepositTerm,
-  Holding,
-  InvestmentTrade,
-  NetWorthSnapshot,
-  PriceQuote,
-  RecurringRule,
-  Settings,
-  Transaction,
-} from '../schemas'
+import type { BudgetLine, BudgetMonth, NetWorthSnapshot, RecurringRule } from '../schemas'
+import { buildLedgerView, type LedgerView } from '../services/overview'
 import { DEFAULT_SETTINGS } from './repositories'
 import { getRepos } from './index'
 
@@ -71,22 +57,7 @@ export function useInvalidate() {
   )
 }
 
-export interface LedgerView {
-  settings: Settings
-  accounts: Account[]
-  categories: Category[]
-  transactions: Transaction[]
-  holdings: Holding[]
-  trades: InvestmentTrade[]
-  prices: PriceQuote[]
-  valuations: AssetValuation[]
-  depositTerms: DepositTerm[]
-  ledger: Ledger
-  /** Giá trị hiện tại (hôm nay) theo account — tài sản: giá trị; nợ: dư nợ. */
-  balances: Map<string, number>
-  categoryById: Map<string, Category>
-  accountById: Map<string, Account>
-}
+export type { LedgerView }
 
 /** Toàn bộ dữ liệu gốc + sổ cái đã dựng sẵn — nền cho mọi màn hình tính số dư / net worth. */
 export function useLedgerView(): { data: LedgerView | undefined; isLoading: boolean; error: unknown } {
@@ -106,34 +77,20 @@ export function useLedgerView(): { data: LedgerView | undefined; isLoading: bool
 
   const data = useMemo(() => {
     if (!ready) return undefined
-    const settings = queries.settings.data ?? DEFAULT_SETTINGS
-    const accounts = queries.accounts.data!
-    const ledger = createLedger({
-      accounts,
-      transactions: queries.transactions.data!,
-      holdings: queries.holdings.data!,
-      trades: queries.trades.data!,
-      prices: queries.prices.data!,
-      valuations: queries.valuations.data!,
-      depositTerms: queries.depositTerms.data!,
-      includeAccruedInterest: settings.includeAccruedInterest,
-    })
-    const date = today()
-    return {
-      settings,
-      accounts,
-      categories: queries.categories.data!,
-      transactions: queries.transactions.data!,
-      holdings: queries.holdings.data!,
-      trades: queries.trades.data!,
-      prices: queries.prices.data!,
-      valuations: queries.valuations.data!,
-      depositTerms: queries.depositTerms.data!,
-      ledger,
-      balances: new Map(accounts.map((a) => [a.id, ledger.valueOf(a, date)])),
-      categoryById: new Map(queries.categories.data!.map((c) => [c.id, c])),
-      accountById: new Map(accounts.map((a) => [a.id, a])),
-    }
+    return buildLedgerView(
+      {
+        settings: queries.settings.data ?? DEFAULT_SETTINGS,
+        accounts: queries.accounts.data!,
+        categories: queries.categories.data!,
+        transactions: queries.transactions.data!,
+        holdings: queries.holdings.data!,
+        trades: queries.trades.data!,
+        prices: queries.prices.data!,
+        valuations: queries.valuations.data!,
+        depositTerms: queries.depositTerms.data!,
+      },
+      today(),
+    )
   }, [
     ready,
     queries.settings.data,

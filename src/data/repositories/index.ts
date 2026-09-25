@@ -47,14 +47,16 @@ export const DEFAULT_SETTINGS: Settings = {
   schemaVersion: CURRENT_SCHEMA_VERSION,
 }
 
-async function currentUserId(client: SupabaseClient): Promise<string> {
+async function currentUserId(client: SupabaseClient, knownUserId?: string): Promise<string> {
+  // Máy chủ MCP không có phiên trình duyệt: đã xác thực token trước và truyền userId vào.
+  if (knownUserId) return knownUserId
   const { data } = await client.auth.getSession()
   const id = data.session?.user.id
   if (!id) throw new AuthRequiredError()
   return id
 }
 
-function createSettingsRepo(client: SupabaseClient) {
+function createSettingsRepo(client: SupabaseClient, knownUserId?: string) {
   const parse = (row: Row) => validate(settingsSchema, fromRow(row))
 
   /** Dòng settings được tạo bởi trigger khi đăng ký; phòng trường hợp chưa có thì dùng mặc định. */
@@ -67,7 +69,7 @@ function createSettingsRepo(client: SupabaseClient) {
     get,
     async update(patch: Partial<Settings>): Promise<Settings> {
       const next = validate(settingsSchema, { ...(await get()), ...patch })
-      const userId = await currentUserId(client)
+      const userId = await currentUserId(client, knownUserId)
       return parse(await run<Row>(client.from('settings').update(toRow(next)).eq('user_id', userId).select('*').single()))
     },
   }
@@ -261,7 +263,12 @@ function createSnapshotsRepo(client: SupabaseClient) {
   }
 }
 
-export function createRepositories(client: SupabaseClient) {
+export interface RepositoryOptions {
+  /** Người dùng đã xác thực (máy chủ MCP). Bỏ trống ở trình duyệt: lấy từ phiên đăng nhập. */
+  userId?: string
+}
+
+export function createRepositories(client: SupabaseClient, options: RepositoryOptions = {}) {
   const investment = createInvestmentRepos(client)
   const budget = createBudgetRepos(client)
   const recurring = createEntityRepo(client, 'recurring_rules', recurringRuleSchema, 'both')
@@ -269,7 +276,7 @@ export function createRepositories(client: SupabaseClient) {
   const valuations = createEntityRepo(client, 'asset_valuations', assetValuationSchema, 'created')
 
   return {
-    settings: createSettingsRepo(client),
+    settings: createSettingsRepo(client, options.userId),
     accounts: createAccountsRepo(client),
     categories: createCategoriesRepo(client),
     transactions: createTransactionsRepo(client),
